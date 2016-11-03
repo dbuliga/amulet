@@ -673,8 +673,10 @@ class Deployment(object):
             with self._deploy_w_timeout(timeout):
                 subprocess.check_call(shlex.split(cmd))
 
-        self.sentry = Talisman(
-            self.services, timeout=timeout, juju_env=self.juju_env)
+        self.sentry = Talisman(self.services,
+                               timeout=timeout,
+                               juju_env=self.juju_env,
+                               series=self.series)
         if cleanup is False:
             tmpdir.makedirs()
             (tmpdir / 'deployer-schema.json').write_text(schema_json)

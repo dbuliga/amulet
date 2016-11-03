@@ -73,13 +73,14 @@ class UnitSentry(Sentry):
         pass
 
     @classmethod
-    def fromunitdata(cls, unit, unit_data):
+    def fromunitdata(cls, unit, unit_data, series):
         address = unit_data['public-address']
         unitsentry = cls(address)
         d = unitsentry.info = unit_data
         d['unit_name'] = unit
         d['service'], d['unit'] = unit.split('/')
-        unitsentry.upload_scripts()
+        if "win" not in series:
+            unitsentry.upload_scripts()
         return unitsentry
 
     def list_actions(self):
@@ -333,7 +334,7 @@ class Talisman(object):
 
     """
 
-    def __init__(self, services, rel_sentry='relation-sentry',
+    def __init__(self, services, series, rel_sentry='relation-sentry',
                  juju_env=None, timeout=300):
         self.service_names = services
         self.unit = {}
@@ -356,13 +357,13 @@ class Talisman(object):
 
             for unit in service_status['units']:
                 unit_data = service_status['units'][unit]
-                self.unit[unit] = UnitSentry.fromunitdata(unit, unit_data)
+                self.unit[unit] = UnitSentry.fromunitdata(unit, unit_data, series)
                 if 'subordinates' in unit_data:
                     for sub in unit_data['subordinates']:
                         if sub.split('/')[0] not in services:
                             continue
                         subdata = unit_data['subordinates'][sub]
-                        self.unit[sub] = UnitSentry.fromunitdata(sub, subdata)
+                        self.unit[sub] = UnitSentry.fromunitdata(sub, subdata, series)
 
     def __getitem__(self, service):
         """Return the UnitSentry object(s) for ``service``
@@ -524,12 +525,16 @@ class Talisman(object):
                 service = status.get(service_name, {})
                 for unit_name, unit in service.items():
                     if unit['agent-status']:
+                        # Every time I ended up here.
                         if unit['agent-status']['current'] != 'idle':
                             return False
                         since = datetime.strptime(unit['agent-status']['since'][:20], '%d %b %Y %H:%M:%S')
                         if (datetime.now() - since).total_seconds() < IDLE_THRESHOLD:
                             return False
                     else:
+                        # If I end up here it will crash because it is trying
+                        # to run some script which is supposed to be on the
+                        # machine already.
                         running_hooks = self.unit[unit_name].juju_agent()
                         if running_hooks is None or running_hooks:
                             return False
